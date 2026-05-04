@@ -17,5 +17,5 @@ startPersistenceTask();
 setupSocketHandlers(io);
 
 httpServer.listen(port, () => {
-    console.log(`>>> Real-time server running on http://localhost:${port}`);
+    console.log(`>>> Real-time server running on ${process.env.NEXT_PUBLIC_SOCKET_URL}`);
 });

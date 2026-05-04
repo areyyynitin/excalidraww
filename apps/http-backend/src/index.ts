@@ -15,5 +15,5 @@ app.get("/health", (req, res) => {
 app.use("/rooms", roomRoutes);
 
 app.listen(port, () => {
-    console.log(`>>> HTTP Backend running on http://localhost:${port}`);
+    console.log(`>>> HTTP Backend running on ${process.env.HTTP_BACKEND_URL}`);
 });
