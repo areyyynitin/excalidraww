@@ -1,102 +1,177 @@
-import Image, { type ImageProps } from "next/image";
-import { Button } from "@repo/ui/button";
-import styles from "./page.module.css";
-
-type Props = Omit<ImageProps, "src"> & {
-  srcLight: string;
-  srcDark: string;
-};
-
-const ThemeImage = (props: Props) => {
-  const { srcLight, srcDark, ...rest } = props;
-
-  return (
-    <>
-      <Image {...rest} src={srcLight} className="imgLight" />
-      <Image {...rest} src={srcDark} className="imgDark" />
-    </>
-  );
-};
+"use client"
+import { useState, useEffect } from 'react';
+import { Canvas } from '../src/components/Canvas';
+import { Toolbar } from '../src/components/Toolbar';
+import { PropertiesPanel } from '../src/components/PropertiesPanel';
+import { SettingsPanel } from '../src/components/SettingsPanel';
+import { ShareDialog } from '../src/components/ShareDialog';
+import { WorkspaceHeader } from '../src/components/WorkspaceHeader';
+import { CommandPalette } from '../src/components/CommandPalette';
+import { ImportDialog } from '../src/components/ImportDialog';
+import { SaveDialog } from '../src/components/SaveDialog';
+import { ExportDialog } from '../src/components/ExportDialog';
+import { BottomLeftControls } from '../src/components/BottomLeftControls';
+import { useStore } from '../src/lib/store';
+import { cn } from '../src/lib/utils';
+import { useFileOperations } from '../src/hooks/use-file-operations';
 
 export default function Home() {
-  return (
-    <div className={styles.page}>
-      <main className={styles.main}>
-        <ThemeImage
-          className={styles.logo}
-          srcLight="turborepo-dark.svg"
-          srcDark="turborepo-light.svg"
-          alt="Turborepo logo"
-          width={180}
-          height={38}
-          priority
-        />
-        <ol>
-          <li>
-            Get started by editing <code>apps/web/app/page.tsx</code>
-          </li>
-          <li>Save and see your changes instantly.</li>
-        </ol>
+  const [showShare, setShowShare] = useState(false);
+  const [copied, setCopied] = useState(false);
+  const [copiedReadOnly, setCopiedReadOnly] = useState(false);
+  const [roomName, setRoomName] = useState('');
+  const [editKey, setEditKey] = useState<string | null>(null);
+  const [roomId, setRoomId] = useState<string | null>(null);
+  const [isReadOnly, setIsReadOnly] = useState(false);
+  const [mounted, setMounted] = useState(false);
 
-        <div className={styles.ctas}>
-          <a
-            className={styles.primary}
-            href="https://vercel.com/new/clone?demo-description=Learn+to+implement+a+monorepo+with+a+two+Next.js+sites+that+has+installed+three+local+packages.&demo-image=%2F%2Fimages.ctfassets.net%2Fe5382hct74si%2F4K8ZISWAzJ8X1504ca0zmC%2F0b21a1c6246add355e55816278ef54bc%2FBasic.png&demo-title=Monorepo+with+Turborepo&demo-url=https%3A%2F%2Fexamples-basic-web.vercel.sh%2F&from=templates&project-name=Monorepo+with+Turborepo&repository-name=monorepo-turborepo&repository-url=https%3A%2F%2Fgithub.com%2Fvercel%2Fturborepo%2Ftree%2Fmain%2Fexamples%2Fbasic&root-directory=apps%2Fdocs&skippable-integrations=1&teamSlug=vercel&utm_source=create-turbo"
-            target="_blank"
-            rel="noopener noreferrer"
-          >
-            <Image
-              className={styles.logo}
-              src="/vercel.svg"
-              alt="Vercel logomark"
-              width={20}
-              height={20}
-            />
-            Deploy now
-          </a>
-          <a
-            href="https://turborepo.dev/docs?utm_source"
-            target="_blank"
-            rel="noopener noreferrer"
-            className={styles.secondary}
-          >
-            Read our docs
-          </a>
-        </div>
-        <Button appName="web" className={styles.secondary}>
-          Open alert
-        </Button>
-      </main>
-      <footer className={styles.footer}>
-        <a
-          href="https://vercel.com/templates?search=turborepo&utm_source=create-next-app&utm_medium=appdir-template&utm_campaign=create-next-app"
-          target="_blank"
-          rel="noopener noreferrer"
-        >
-          <Image
-            aria-hidden
-            src="/window.svg"
-            alt="Window icon"
-            width={16}
-            height={16}
-          />
-          Examples
-        </a>
-        <a
-          href="https://turborepo.dev?utm_source=create-turbo"
-          target="_blank"
-          rel="noopener noreferrer"
-        >
-          <Image
-            aria-hidden
-            src="/globe.svg"
-            alt="Globe icon"
-            width={16}
-            height={16}
-          />
-          Go to turborepo.dev →
-        </a>
-      </footer>
-    </div>
+  const {
+    userCount,
+    setRoomId: setStoreRoomId,
+    theme,
+    setSidebarOpen,
+    setCommandPaletteOpen
+  } = useStore();
+
+  const { handleImportRequest } = useFileOperations();
+
+  useEffect(() => {
+    setMounted(true);
+    const handleKeyDown = (e: KeyboardEvent) => {
+      if ((e.metaKey || e.ctrlKey) && e.key === 'k') {
+        e.preventDefault();
+        setCommandPaletteOpen(true);
+      }
+    };
+    window.addEventListener('keydown', handleKeyDown);
+    return () => window.removeEventListener('keydown', handleKeyDown);
+  }, [setCommandPaletteOpen]);
+
+  useEffect(() => {
+    const params = new URLSearchParams(window.location.search);
+    let room = params.get('room');
+    let key = params.get('key');
+    const readOnly = params.get('readOnly') === 'true';
+
+    if (!room && typeof window !== 'undefined') {
+      const savedRoom = localStorage.getItem('last_room_id');
+      const savedKey = localStorage.getItem('last_edit_key');
+      if (savedRoom) {
+        room = savedRoom;
+        key = savedKey;
+        params.set('room', room);
+        if (key) params.set('key', key);
+        const newUrl = `${window.location.pathname}?${params.toString()}`;
+        window.history.replaceState({}, '', newUrl);
+      }
+    }
+
+    const timeout = setTimeout(() => {
+      setRoomId(room);
+      setEditKey(key);
+      if (room) {
+        setStoreRoomId(room);
+        localStorage.setItem('last_room_id', room);
+        if (key) localStorage.setItem('last_edit_key', key);
+      }
+      setIsReadOnly(readOnly || (!!room && !key));
+    }, 0);
+    return () => clearTimeout(timeout);
+  }, [setStoreRoomId]);
+
+  if (!mounted) {
+    return <main className="w-full h-screen bg-[#fafafa]" />;
+  }
+
+  const handleCopy = () => {
+    if (typeof window === 'undefined') return;
+    const url = new URL(window.location.href);
+    url.searchParams.delete('readOnly');
+    navigator.clipboard.writeText(url.toString());
+    setCopied(true);
+    setTimeout(() => setCopied(false), 2000);
+  };
+
+  const handleCopyReadOnly = () => {
+    if (typeof window === 'undefined') return;
+    const url = new URL(window.location.href);
+    url.searchParams.delete('key');
+    url.searchParams.set('readOnly', 'true');
+    navigator.clipboard.writeText(url.toString());
+    setCopiedReadOnly(true);
+    setTimeout(() => setCopiedReadOnly(false), 2000);
+  };
+
+  const handleStartSession = () => {
+    if (!roomId) {
+      const newRoomId = Math.random().toString(36).substring(2, 11);
+      const newKey = Math.random().toString(36).substring(2, 11);
+      setRoomId(newRoomId);
+      setEditKey(newKey);
+      setStoreRoomId(newRoomId);
+
+      const params = new URLSearchParams(window.location.search);
+      params.set('room', newRoomId);
+      params.set('key', newKey);
+      window.history.replaceState({}, '', `?${params.toString()}`);
+
+      localStorage.setItem('last_room_id', newRoomId);
+      localStorage.setItem('last_edit_key', newKey);
+    }
+    setShowShare(false);
+  };
+
+  return (
+    <main className={cn(
+      "w-full h-screen relative overflow-hidden transition-colors duration-500",
+      theme === 'dark' ? "bg-neutral-950 text-white" : "bg-[#fafafa] text-neutral-900"
+    )}>
+      <div className={cn(
+        "absolute inset-0 pointer-events-none canvas-grid",
+        theme === 'dark' ? "opacity-10 brightness-200 invert" : "opacity-40"
+      )} />
+
+      <WorkspaceHeader
+        roomName={roomName}
+        isReadOnly={isReadOnly}
+        userCount={userCount}
+        onShowSettings={() => setSidebarOpen(true)}
+      />
+
+      <SettingsPanel
+        onShare={() => { setSidebarOpen(false); setShowShare(true); }}
+        onImportFile={handleImportRequest}
+        onOpenCommandPalette={() => setCommandPaletteOpen(true)}
+      />
+
+      <CommandPalette />
+
+      <ImportDialog />
+      <SaveDialog />
+      <ExportDialog />
+
+      <ShareDialog
+        isOpen={showShare}
+        onClose={() => setShowShare(false)}
+        roomId={roomId}
+        isReadOnly={isReadOnly}
+        copied={copied}
+        copiedReadOnly={copiedReadOnly}
+        roomName={roomName}
+        onCopy={handleCopy}
+        onCopyReadOnly={handleCopyReadOnly}
+        onStartSession={handleStartSession}
+      />
+
+      <Canvas readOnly={isReadOnly} roomId={roomId} />
+
+      {!isReadOnly && (
+        <>
+          <Toolbar onShare={() => setShowShare(true)} />
+          <PropertiesPanel />
+          <BottomLeftControls />
+        </>
+      )}
+    </main>
   );
 }
